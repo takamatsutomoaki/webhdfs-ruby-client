@@ -9,7 +9,8 @@ module WebHDFS
     @fu_doas = nil
     @fu_httpfs_mode = false
     @fu_auth_type = :pseudo
-    @fu_pass_keytab = nil
+    @fu_keytab = nil
+    @fu_pass = nil
 
     # Public: Set hostname and port number of WebHDFS
     #
@@ -339,7 +340,8 @@ module WebHDFS
       end
       if @fu_auth_type == :kerberos
         client.auth_type = @fu_auth_type
-        client.pass_keytab= @fu_pass_keytab
+        client.keytab = @fu_keytab
+        client.pass = @fu_pass
       end
       client
     end

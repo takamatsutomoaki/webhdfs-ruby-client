@@ -13,10 +13,12 @@ module WebHDFS
     OPT_TABLE = {} # internal use only
 
     attr_accessor :host, :port, :username, :doas
-    attr_accessor :open_timeout, :read_timeout
+    attr_accessor :open_timeout # default 30s (in ruby net/http)
+    attr_accessor :read_timeout # default 60s (in ruby net/http)
     attr_accessor :httpfs_mode
     attr_accessor :auth_type       # pseudo, kerberos
-    attr_accessor :pass_keytab
+    attr_accessor :keytab
+    attr_accessor :pass
 
 
     def initialize(host='localhost', port=14000, username=nil, doas=nil)
@@ -26,6 +28,10 @@ module WebHDFS
       @doas = doas
 
       @httpfs_mode = false
+
+      @auth_type = :pseudo
+      @keytab = nil
+      @pass = nil
     end
 
     # curl -i -X PUT "http://<HOST>:<PORT>/webhdfs/v1/<PATH>?op=CREATESYMLINK&destination=<PATH>
@@ -231,7 +237,7 @@ module WebHDFS
       api_path(path) + '?' + query
     end
 
-    REDIRECTED_OPERATIONS = ['APPEND'] # , 'CREATE' ] , 'OPEN'], 'GETFILECHECKSUM']
+    REDIRECTED_OPERATIONS = ['APPEND' ,'CREATE' , 'OPEN', 'GETFILECHECKSUM']
     REDIRECTED_CODE = (300..399)
 
     def operate_requests(method, path, op, params={}, payload=nil)
@@ -247,7 +253,6 @@ module WebHDFS
                 else
                   uri.path
                 end
-        puts "\txxx rpath=" +rpath
         request(uri.host, uri.port, method, rpath, nil, {}, payload, {'Content-Type' => 'application/octet-stream'})
       else
         if @httpfs_mode and not payload.nil?
@@ -280,15 +285,20 @@ module WebHDFS
       HTTPI.log_level= :debug
       HTTPI.adapter = :net_http #  one of [:httpclient, :curb, :net_http]
 
-
       if @auth_type == :kerberos
-        if @username and @pass_keytab
+        if @username
           krb5 = Krb5Auth::Krb5.new
           inited = false;
           begin
-            inited = krb5.get_init_creds_password(@username, @pass_keytab)
+            if @keytab
+              inited = krb5.get_init_creds_keytab(@username, @keytab)
+            elsif @pass
+              inited = krb5.get_init_creds_password(@username, @pass)
+            else
+              raise ArgumentError, "kerberos authentication requires keytab or password"
+            end
           rescue
-            inited = krb5.get_init_creds_keytab(@username, @pass_keytab)
+            raise WebHDFS::SecurityError, "kerberos initialization is failed"
           end
           if inited
             krb5.cache
@@ -297,7 +307,6 @@ module WebHDFS
           end
         end
       end
-      # puts %x{klist}
       req.open_timeout = @open_timeout if @open_timeout
       req.read_timeout = @read_timeout if @read_timeout
       request_path = if op
@@ -308,28 +317,11 @@ module WebHDFS
       req.url = URI::HTTP.build({:host => host, :port => port}) + request_path
       req.headers = header.nil? ? {} : header        #  MUST BE ASSIGN {} if nil BY zixian.shen
       req.body =  payload.nil? ? {} : payload        #  MUST BE ASSIGN {} if nil BY zixian.shen
-      # puts ">>> req.url="+req.url.to_s
-      # puts ">>> req.headers="+req.headers.to_s
-      # puts ">>> req.body="+req.body.to_s
 
       res = HTTPI.request( method, req )
-#      res = conn.send_request(method, request_path, payload, header)
-
-      #puts res.code, res.code.class
-      #puts res.headers, res.headers.class
-      #puts res.body, res.body.class
-      #puts res.headers['Content-Type'].include?('application/json')
-
-      #case res
-      #when Net::HTTPSuccess
-      #  res
-      #when Net::HTTPRedirection
-      #  res
       if HTTPI::Response::SuccessfulResponseCodes.include?(res.code)
-        krb5.destroy if not krb5.nil?
         res
       elsif REDIRECTED_CODE.include?(res.code)
-        krb5.destroy if not krb5.nil?
         res
       else
         message = if res.body and not res.body.empty?
