@@ -1,3 +1,5 @@
+now revising...
+
 # webhdfs-client - A client library implementation for Hadoop WebHDFS, and HttpFs, for Ruby
 
 The webhdfs-client gem is to access Hadoop WebHDFS (EXPERIMENTAL: and HttpFs). WebHDFS::Client is a client class, and WebHDFS::FileUtils is utility like 'fileutils'.
