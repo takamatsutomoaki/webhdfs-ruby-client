@@ -20,4 +20,7 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency "rdoc", ">= 3.12"
   gem.add_development_dependency "simplecov", ">= 0.5.4"
   gem.add_development_dependency "rr", ">= 1.0.0"
+  gem.add_development_dependency "timfel-krb5-auth"
+  gem.add_development_dependency "httpi"
+  gem.add_development_dependency "curb"
 end
